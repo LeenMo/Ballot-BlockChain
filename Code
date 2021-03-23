@@ -1,0 +1,112 @@
+/*this is a voting DApp where an authorized person (chairman in our case) can create a voting instance and add candidates and voters
+proposal is similar to candidates
+the chaiperson should initialize th number of proposals from the beginning (set to 4 for our example)
+he can also start and end a voting session
+in this code, the chairperson can add himself as a voter
+non-regisered [voter] addresses cannot vote, and non-registered [candidate] addresses cannot be voted for
+voters cannot vote more than once and cannot vote to an address that's not a candidate
+*/
+
+pragma solidity ^0.5.0;
+
+contract Ballot {
+
+    struct Voter {                     
+        uint weight;    //this is mainly used for testing purposes. each voter's vote counts as one. but a chairperson's vote counts as two
+        bool voted;     //boolean to check if the voter has voted or not yet
+        uint8 vote;     //saves who the voter voted for
+        bool registered;    //this boolean is false by default. it keeps track of if a voter has been registered
+    }
+    
+    struct Proposal {                  
+        uint voteCount; // save the number of votes that a candidate has obtained
+        string name;    //save the name of the candidate
+    }
+
+    address chairperson;    //the one who is allowed to add addresses and start/end the voting session
+    mapping(address => Voter) voters;  //map  address to a voter and cal the hash table 'voters'
+    Proposal[] proposals;       //save vote counts for each specific candidate
+    uint public candidateCount=0;   //used to keep track of the number of candidates already added
+    
+    
+    enum State { Created, Voting, Ended }   //enum is used to define a set of names as constants. here, we defined the states of a voting session
+	State public state;                     //create an instance of State
+    
+    //the chaiperson(who has first access to the contract) should input the total number of candidates 
+    constructor(uint8 numProposals) public  {
+        chairperson = msg.sender;   //set the address of the chairperson
+        voters[chairperson].weight = 2; // weight 2 for testing purposes
+        proposals.length = numProposals;
+        state = State.Created;      //assign the state to be created (as in voting session is now created)
+        
+    }
+    
+
+    //this modifier ensures that the address of the person accessing a function is the chairperson
+    modifier onlychair(){
+        require (msg.sender == chairperson);
+        _;
+    }
+    
+     //this modifier ensures that the staet of the voting session is the csame as that inputted as a parameter
+    modifier inState(State _state) {
+		require(state == _state);
+		_;
+    }
+    
+    // this modifier makes sure that the number of candidates added is less than the total number of proposals/candidates tha was initialized at first by the chairperson
+    modifier limitCandidate() {
+        require(candidateCount< proposals.length);
+        _;
+    }
+    
+    //start vooting only if the previous state was 'created' to make sure that the chairperson (ONLY) does not allow voters to vote outside the allocated time
+    function startVoting() public onlychair inState(State.Created){
+        state=State.Voting;
+    }
+    
+    //end vooting only if the previous state was 'voting' to make sure that the chairperson (ONLY) can stop the voting session
+    function endVoting() public onlychair inState(State.Voting){
+        state=State.Ended;
+    }
+    
+    //only chairperson can register voters after creating the voting session
+    function registerVoter(address voter) public onlychair inState(State.Created){
+        require (voters[voter].registered == false) ;   //ensures that a voter is registered only once
+        voters[voter].weight = 1;   //the vote is counted as one only
+        voters[voter].voted = false;    //the voter hasn't voted yet
+        voters[voter].registered = true;    //the voter is now registered and cannot be reistered again
+        
+    }
+    
+    //only chairperson can register a candidate by his name after creating the voting session and if the number of candidates didn't reach the max limit
+    function registerCandidate(string memory candidatename) public onlychair inState(State.Created) limitCandidate {
+        proposals[candidateCount].name = candidatename;
+       // Proposal memory proposal;
+        //proposal.name = candidatename;  //assign the name of the candidate
+        //proposals.push(proposal);
+        candidateCount ++;
+    }
+
+
+    //voting can take place only if the state is changed to 'voting'
+    function vote(uint8 toProposal) public inState(State.Voting) {
+        Voter storage sender = voters[msg.sender];  //the address of the person accessing/calling the function is saved to sender
+        require (sender.voted==false &&  toProposal < proposals.length && sender.registered == true); //make sure the voter hasn't already voted AND the candidate exists AND the voter had already been registered
+        sender.voted = true;    //change status of voter to voted
+        sender.vote = toProposal;   //save the person's vote
+        proposals[toProposal].voteCount += sender.weight;   //update the numbre of votes a candidate has
+    }
+
+    //anyone can request to check who the winner is and how many votes they got when the voting is ENDED
+    function reqWinner() public inState(State.Ended) view returns (uint8 _winningProposal, uint256 winningVoteCount, string memory winningCandidate) { 
+        winningVoteCount = 0;
+        for (uint8 prop = 0; prop < proposals.length; prop++)       //loop through all candidates and save the highest number of votes in winningVoteCount
+            if (proposals[prop].voteCount > winningVoteCount) {
+                winningVoteCount = proposals[prop].voteCount;
+                _winningProposal = prop;
+                winningCandidate = proposals[prop].name;
+            }
+       assert(winningVoteCount>=1);     //if the winning vote count is 0 then an error is created.
+    }
+}
