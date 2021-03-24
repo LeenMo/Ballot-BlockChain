@@ -80,8 +80,8 @@ contract Ballot {
     }
     
     //only chairperson can register a candidate by his name after creating the voting session and if the number of candidates didn't reach the max limit
-    function registerCandidate(string memory candidatename) public onlychair inState(State.Created) limitCandidate {
-        proposals[candidateCount].name = candidatename;
+    function registerCandidate(uint8 prop, string memory candidatename) public onlychair inState(State.Created) limitCandidate {
+        proposals[prop].name = candidatename;
        // Proposal memory proposal;
         //proposal.name = candidatename;  //assign the name of the candidate
         //proposals.push(proposal);
